@@ -122,6 +122,5 @@ LEFT JOIN payment_amount pa ON pa.passenger_id = u.user_id
 
 ORDER BY u.user_id
 
-LIMIT 100
 
 

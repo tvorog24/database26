@@ -77,5 +77,3 @@ JOIN car ON car.car_id = "order".car_id
 JOIN car_class cc ON cc.class_id = car.class_id
 
 ORDER BY "order".order_id
-
-LIMIT 100

@@ -50,7 +50,7 @@ SELECT (CASE os.week_day
             TO_CHAR(MAKE_TIME(os.span_start + 3, 0, 0), 'HH24:MI')
         ) AS time_span,
 
-        ROUND(dl.average, 1), dl.all_in_all, 
+        ROUND(dl.average, 1) AS average, dl.all_in_all, 
         (CASE WHEN day_pos = 1 THEN 'yes' ELSE 'no' END) AS max_day_load,
         (CASE WHEN week_pos = 1 THEN 'yes' ELSE 'no' END) AS max_week_load,
         -- вычисление суммы выплат
