@@ -139,7 +139,7 @@ conn.commit()
 n_cars = 5000
 cars_data = []
 for _ in range(n_cars):
-    reg_num = fake.unique.bothify(letters='ABEKMOPCTYX', text='?###??##')
+    reg_num = fake.unique.bothify(letters='АВЕКМНОРУХСТ', text='?###??##')
     year = random.randint(1950, 2026)
     rent = random.triangular(1000, 5000, 150000) # за день
     maintenance = random.triangular(5000, 10000, 100000) # за месяц
@@ -203,11 +203,11 @@ conn.commit()
 
 # заполнение contract ->
 
-n_contracts = 20000
+n_contracts = 750
 contracts_data = []
 
 for _ in range(n_contracts):
-    start_date = fake.date_between(start_date='-5y', end_date='today')
+    start_date = fake.date_between(start_date='-5y', end_date='-1d')
     end_date = fake.date_between(start_date=start_date + timedelta(days=1), end_date='+5y')
     car_id = random.randint(1, n_cars)
     driver_id = random.randint(n_passengers + 1, n_passengers + n_drivers)
@@ -229,33 +229,60 @@ conn.commit()
 
 # заполнение order ->
 
-n_orders = 100000
+contracts_data_ext = []
+for contract in contracts_data:
+    car_id = contract[4]
+    car = cars_data[car_id - 1]
+    class_id = car[1]
+    contracts_data_ext.append([*contract, class_id])
+
+cde = dict()
+for class_id in range(1, len(car_classes_data) + 1):
+    cde[class_id] = list(filter(lambda x: x[5] == class_id, contracts_data_ext))
+
+n_orders = 30000
 orders_data = []
 all_drivers_ids = set([i for i in range(n_passengers + 1, n_passengers + n_drivers + 1)])
 
 for order_id in range(1, n_orders + 1):
+    class_id = random.randint(1, len(car_classes_data))
+    attempts = random.randint(1, 3)
+    contracts_sample = random.sample(cde[class_id], k=attempts)
+    already_completed = False
+    used_drivers_id = set()
     from_addr = fake.address().replace('\n', ', ')
     to_addr = fake.address().replace('\n', ', ')
     passenger_id = random.randint(1, n_passengers)
-    appear_at = fake.date_time_between(start_date='-5y', end_date='now')
-    completed = random.choices([True, False], weights=[3, 1])[0]
-    used_driver_ids = set()
-    while len(used_driver_ids) < n_drivers: 
-        if completed:
+    start_date = max([cs[0] for cs in contracts_sample])
+    end_date = min([cs[1] for cs in contracts_sample])
+    if start_date >= end_date:
+        contracts_sample = [contracts_sample[0]]
+        start_date = contracts_sample[0][0]
+        end_date = contracts_sample[0][1]
+    if end_date > fake.date_between_dates(date_start='now', date_end='now'):
+        end_date = fake.date_between_dates(date_start=start_date, date_end='now')
+    appear_at = fake.date_time_between(start_date=start_date, end_date=end_date)
+    for contract in contracts_sample:
+        start_at = None
+        finish_at = None
+        manager_id, driver_id, car_id = contract[2:-1]
+        if driver_id in used_drivers_id:
+            continue
+        used_drivers_id.add(driver_id)
+        cancelled = True
+        if not already_completed:
+            cancelled = random.choices([True, False], weights=[1, 7])[0]
+            if not cancelled:
+                already_completed = True
+        if not cancelled:
             start_at = appear_at + timedelta(minutes=random.randint(1, 10))
-            finish_at = start_at + timedelta(minutes=random.randint(10, 180))
-        else:
-            start_at = None
-            finish_at = None
-        driver_id = random.choice(list(all_drivers_ids.difference(used_driver_ids)))
-        used_driver_ids.add(driver_id)
-        car_id = random.randint(1, n_cars)
+            finish_at = None 
+            if random.choices([True, False], weights=[9, 1])[0]: 
+                finish_at = start_at + timedelta(minutes=random.randint(10, 180))
+            
         orders_data.append((
-            order_id, driver_id, from_addr, to_addr, appear_at, completed, start_at, finish_at, passenger_id, car_id
+            order_id, driver_id, from_addr, to_addr, appear_at, cancelled, start_at, finish_at, passenger_id, car_id, class_id
         ))
-        if completed:
-            break
-        completed = random.choices([True, False], weights=[3, 1])[0]
 
 execute_values(cursor,
     '''INSERT INTO "order" (
@@ -264,11 +291,12 @@ execute_values(cursor,
         location_from,
         location_to,
         order_time,
-        completed,
+        cancelled,
         start_time,
         end_time,
         passenger_id, 
-        car_id
+        car_id,
+        class_id
     ) VALUES %s''',
     orders_data
 )
@@ -279,9 +307,9 @@ conn.commit()
 
 ordered_facilities = []
 for order_id in range(1, n_orders + 1):
-    if random.choices([True, False], weights=[1, 9])[0]:
+    if random.choices([True, False], weights=[1, 19])[0]:
         driver_ids = [o[1] for o in list(filter(lambda x: x[0] == order_id, orders_data))]
-        for facility_id in random.sample([i + 1 for i in range(len(facilities_data))], k=random.randint(1, len(facilities_data))):
+        for facility_id in list(set(random.choices([i + 1 for i in range(len(facilities_data))], weights=[len(facilities_data) - i for i in range(len(facilities_data))], k=random.randint(1, len(facilities_data))))):
             for driver_id in driver_ids:
                 ordered_facilities.append((facility_id, order_id, driver_id))
 
@@ -314,11 +342,11 @@ with open('dbs_for_generating/driver_reviews.csv', encoding='utf-8') as csvfile:
             driver_reviews[rate] = [content]
 
 reviews_data = []
-completed_orders = list(filter(lambda x: x[5], orders_data))
+completed_orders = list(filter(lambda x: not x[5] and x[7] is not None, orders_data))
 for order in completed_orders:
     # отзыв пасссажира
     if random.choices([True, False], weights=[2, 1])[0]:
-        rate = random.randint(1, 5)
+        rate = random.choice([max(1, order[1] % 6), max(1, sum(list(map(int, list(str(order[1]))))) % 6)])
         if random.choice([True, False]):
             text = random.choice(passenger_reviews[rate])
         else:
@@ -326,7 +354,7 @@ for order in completed_orders:
         reviews_data.append((order[0], order[1], order[8], text, rate))
     # отзыв водителя
     if random.choices([True, False], weights=[2, 1])[0]:
-        rate = random.randint(1, 5)
+        rate = random.choice([max(1, order[8] % 6), max(1, sum(list(map(int, list(str(order[8]))))) % 6)])
         if random.choice([True, False]):
             text = random.choice(driver_reviews[rate])
         else:
@@ -358,12 +386,13 @@ conn.commit()
 
 payments_data = []
 for order in completed_orders: # выплаты за заказ (3 и 4)
-    order_id = order[0]
-    driver_id = order[1] 
-    car_id = None
-    time = order[7] + timedelta(minutes=random.randint(1, 10))
-    for type_id in (3, 4):
-        payments_data.append((type_id, time, car_id, order_id, driver_id))
+    if random.choices([True, False], weights=[19, 1])[0]: # будут должники
+        order_id = order[0]
+        driver_id = order[1] 
+        car_id = None
+        time = order[7] + timedelta(minutes=random.randint(1, 10))
+        for type_id in (3, 4):
+            payments_data.append((type_id, time, car_id, order_id, driver_id))
 
 for contract in contracts_data: # выплаты за аренду (1)
     type_id = 1

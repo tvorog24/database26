@@ -52,7 +52,7 @@ CREATE TABLE car_model (
 
 CREATE TABLE car (
     car_id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    car_number VARCHAR(9) NOT NULL,
+    car_number VARCHAR(9) UNIQUE NOT NULL,
     class_id INT NOT NULL REFERENCES car_class (class_id) ON DELETE RESTRICT,
     release_year INT NOT NULL CHECK (release_year > 1900 AND release_year < 2100),
     rent_cost_per_day FLOAT NOT NULL CHECK (rent_cost_per_day > 0),
@@ -63,7 +63,7 @@ CREATE TABLE car (
 );
 
 CREATE TABLE contract (
-    cotract_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    contract_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "start_date" DATE NOT NULL,
     end_date DATE NOT NULL CHECK ("start_date" < end_date),
     manager_id BIGINT NOT NULL REFERENCES "user" (user_id) ON DELETE RESTRICT,
@@ -83,19 +83,16 @@ CREATE TABLE "order" (
     location_from TEXT NOT NULL,
     location_to TEXT NOT NULL,
     order_time TIMESTAMP NOT NULL,
-    completed BOOLEAN NOT NULL,
+    cancelled BOOLEAN NOT NULL,
     start_time TIMESTAMP CHECK (
-        NOT completed AND start_time IS NULL 
-        OR 
-        completed AND start_time IS NOT NULL
+        cancelled AND start_time IS NULL OR not cancelled
     ), 
     end_time TIMESTAMP CHECK (
-        NOT completed AND end_time IS NULL 
-        OR 
-        completed AND end_time IS NOT NULL AND start_time < end_time AND order_time < start_time
+        cancelled AND end_time IS NULL OR not cancelled
     ),
     passenger_id BIGINT NOT NULL REFERENCES "user" (user_id) ON DELETE RESTRICT,
-    car_id BIGINT NOT NULL REFERENCES car (car_id) ON DELETE RESTRICT,
+    car_id BIGINT REFERENCES car (car_id) ON DELETE RESTRICT,
+    class_id INT NOT NULL REFERENCES car_class (class_id) ON DELETE RESTRICT,
     CONSTRAINT pk_order_driver PRIMARY KEY (order_id, driver_id)
 );
 
