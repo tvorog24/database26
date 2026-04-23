@@ -5,7 +5,7 @@
 
 -- все пассажиры и их поездки и платежи (если есть)
 WITH pass_ext AS (
-    SELECT o.order_id, DATE(o.order_time) AS order_date, o.completed, u.user_id AS passenger_id, pa.payment_id
+    SELECT o.order_id, DATE(o.order_time) AS order_date, o.cancelled, o.end_time, u.user_id AS passenger_id, pa.payment_id
     FROM "order" o
     LEFT JOIN payment pa ON pa.order_id = o.order_id AND pa.driver_id = o.driver_id AND pa.type_id = 3
     RIGHT JOIN "user" u ON o.passenger_id = u.user_id AND u.role_id = 1
@@ -16,11 +16,11 @@ order_amount AS (
     FROM pass_ext
     GROUP BY passenger_id
 ),
--- сколько у пассажира заверешнных заказов
+-- сколько у пассажира завершенных заказов
 completed_amount AS (
     SELECT passenger_id, COUNT(order_id) AS amount 
     FROM pass_ext
-    WHERE completed
+    WHERE NOT cancelled AND end_time IS NOT NULL
     GROUP BY passenger_id
 ),
 -- есть ли у пассажира завершенная неоплаченная поездка 
@@ -29,13 +29,13 @@ has_dept AS (
     (CASE 
         WHEN EXISTS(
             SELECT 1 FROM pass_ext pe2
-            WHERE pe2.completed AND pe2.passenger_id = pe.passenger_id AND pe2.payment_id IS NULL
+            WHERE NOT pe2.cancelled AND pe2.end_time IS NOT NULL AND pe2.passenger_id = pe.passenger_id AND pe2.payment_id IS NULL
         ) THEN 'yes'
         ELSE 'no'
         END
     ) AS has_dept 
     FROM pass_ext pe
-    WHERE completed
+    WHERE NOT cancelled and end_time IS NOT NULL
     GROUP BY passenger_id
 ),
 -- самый последний заказ
@@ -90,15 +90,15 @@ SELECT u.full_name AS passenger_fio, u.phone_number, COALESCE(oa.amount, 0) AS a
                 -- расчет среднего значения рейтинга по ним
                 COALESCE((SELECT AVG(r.rate) FROM "order" oo
                     JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.passenger_id
-                    WHERE oo.passenger_id = o.passenger_id AND oo.completed AND oo.end_time < o.end_time
+                    WHERE oo.passenger_id = o.passenger_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                 ), 0) AS rating,
                 -- расчет числа оценок
                 COALESCE((SELECT COUNT(r.rate) FROM "order" oo
                     JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.passenger_id
-                    WHERE oo.passenger_id = o.passenger_id AND oo.completed AND oo.end_time < o.end_time
+                    WHERE oo.passenger_id = o.passenger_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                 ), 0) AS reviews_count
                 FROM "order" o
-                WHERE o.completed AND o.passenger_id = u.user_id 
+                WHERE NOT o.cancelled AND o.end_time IS NOT NULL AND o.passenger_id = u.user_id 
         ) o_ext
         JOIN car ON car.car_id = o_ext.car_id
         JOIN car_class cc ON car.class_id = cc.class_id

@@ -5,7 +5,7 @@
 
 -- все договоры и заказы по ним (если есть)
 WITH cont_ext AS (
-    SELECT o.order_id, o.completed, co.contract_id, o.order_time, co.start_date, co.end_date 
+    SELECT o.order_id, o.cancelled, o.end_time, co.contract_id, o.order_time, co.start_date, co.end_date 
     FROM "order" o  
     RIGHT JOIN "contract" co ON o.car_id = co.car_id AND o.driver_id = co.driver_id
     AND DATE(o.order_time) >= co.start_date AND DATE(o.order_time) <= co.end_date
@@ -14,14 +14,14 @@ WITH cont_ext AS (
 completed_stats AS (
     SELECT contract_id, COUNT(order_id) AS completed_amount 
     FROM cont_ext
-    WHERE completed
+    WHERE NOT cancelled AND end_time IS NOT NULL
     GROUP BY contract_id
 ),
 -- подсчет отмененных заказов по контракту
 cancelled_stats AS (
     SELECT contract_id, COUNT(order_id) AS cancelled_amount 
     FROM cont_ext
-    WHERE NOT completed
+    WHERE cancelled
     GROUP BY contract_id
 ),
 -- подсчет всех заказов по контракту
@@ -73,15 +73,15 @@ SELECT DISTINCT u.full_name AS driver_fio, cb.brand_name AS car_name, co.contrac
                 -- расчет среднего значения рейтинга по ним
                 (SELECT AVG(r.rate) FROM "order" oo
                     JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.driver_id
-                    WHERE oo.driver_id = o.driver_id AND oo.completed AND oo.end_time < o.end_time
+                    WHERE oo.driver_id = o.driver_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                 ) AS rating,
                 -- расчет числа оценок
                 COALESCE((SELECT COUNT(r.rate) FROM "order" oo
                     JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.driver_id
-                    WHERE oo.driver_id = o.driver_id AND oo.completed AND oo.end_time < o.end_time
+                    WHERE oo.driver_id = o.driver_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                 ), 0) AS reviews_count
                 FROM "order" o
-                WHERE o.completed AND o.driver_id = co.driver_id AND o.car_id = co.car_id AND DATE(o.order_time) >= co.start_date AND DATE(o.order_time) <= co.end_date
+                WHERE NOT o.cancelled AND o.driver_id = co.driver_id AND o.car_id = co.car_id AND DATE(o.order_time) >= co.start_date AND DATE(o.order_time) <= co.end_date
         ) o_ext
         JOIN car ON car.car_id = o_ext.car_id
         JOIN car_class cc ON car.class_id = cc.class_id

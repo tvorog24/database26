@@ -86,15 +86,15 @@ SELECT (CASE os.week_day
                     -- расчет среднего значения рейтинга по ним
                     (SELECT AVG(r.rate) FROM "order" oo
                         JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.driver_id
-                        WHERE oo.driver_id = o.driver_id AND oo.completed AND oo.end_time < o.end_time
+                        WHERE oo.driver_id = o.driver_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                     ) AS rating,
                     -- расчет числа оценок
                     COALESCE((SELECT COUNT(r.rate) FROM "order" oo
                         JOIN review r ON r.order_id = oo.order_id AND r.user_id <> oo.driver_id
-                        WHERE oo.driver_id = o.driver_id AND oo.completed AND oo.end_time < o.end_time
+                        WHERE oo.driver_id = o.driver_id AND NOT oo.cancelled AND oo.end_time < o.end_time
                     ), 0) AS reviews_count
                     FROM "order" o
-                    WHERE o.completed AND MAKE_TIME(EXTRACT(HOUR FROM o.order_time)::INTEGER, 0, 0) BETWEEN 
+                    WHERE NOT o.cancelled AND MAKE_TIME(EXTRACT(HOUR FROM o.order_time)::INTEGER, 0, 0) BETWEEN 
                     MAKE_TIME(os.span_start, 0, 0) AND MAKE_TIME(os.span_start + 2, 59, 59) 
                     AND EXTRACT(DOW FROM o.order_time) = os.week_day
             ) o_ext

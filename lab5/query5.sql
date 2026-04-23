@@ -6,17 +6,17 @@
 -- так как в тз нет причин отказов, то
 -- отказ -> доп. услуга
 
--- доп. услуги + завершенные заказы, где они были указаны + водитель + пассажир 
+-- доп. услуги + неотмененные заказы, где они были указаны + водитель + пассажир 
 WITH order_stats AS (
     SELECT
         f.facility_id, f.facility_name, ofc.order_id, o.driver_id, o.passenger_id, u1.full_name AS driver_fio,
-        u2.full_name AS passenger_fio, o.order_time, o.completed
+        u2.full_name AS passenger_fio, o.order_time, o.cancelled
     FROM facility f
     LEFT JOIN ordered_facility ofc ON ofc.facility_id = f.facility_id
     JOIN "order" o ON o.order_id = ofc.order_id AND o.driver_id = ofc.driver_id
     JOIN "user" u1 ON u1.user_id = o.driver_id
     JOIN "user" u2 ON u2.user_id = o.passenger_id
-    WHERE o.completed
+    WHERE NOT o.cancelled
 ), 
 -- для каждой доп. услуги: сколько раз заказывалась, когда в последний раз, сколько разных водителей выполняли
 facility_stats AS (
@@ -60,4 +60,3 @@ LEFT JOIN driver_stats dst ON dst.facility_id = fst.facility_id AND dst.pos = 1
 LEFT JOIN passenger_stats pst ON pst.facility_id = fst.facility_id AND pst.pos = 1
 
 ORDER BY fst.facility_id
-
